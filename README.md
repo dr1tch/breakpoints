@@ -2,7 +2,9 @@
 
 See one web page at every device width side by side, with real phone and tablet emulation, overflow checks and screenshots.
 
-![Breakpoints showing a page at 375, 768 and 1440 px with overflow results](docs/overflow.png)
+[![Breakpoints demo: one page at several widths, tabs, sessions and the overflow check](https://github.com/dr1tch/breakpoints/releases/download/media/demo.gif)](https://github.com/dr1tch/breakpoints/releases/download/v0.3.0/breakpoints-demo.mp4)
+
+▶ **[Watch the 50-second demo with sound](https://github.com/dr1tch/breakpoints/releases/download/v0.3.0/breakpoints-demo.mp4)** (MP4)
 
 Breakpoints is a desktop app for Linux and Windows. Enter the URL of the page you are building and it loads that page once per width, scaled to fit the window. Each phone or tablet frame behaves like the device: mobile user agent, touch support and a high pixel ratio. Click a link in one frame and every frame follows. One click finds the elements that stick out past the screen edge at each width.
 
@@ -62,11 +64,13 @@ Frames start 1.5 s apart, so apps that refresh a shared session on load don't ra
 
 ## Screenshots
 
-| Five widths, overflow details in a popover | Presets |
+| Same page, three accounts: one tab per session | Session menu |
 |---|---|
-| ![Five frames with overflow results](docs/five-widths.png) | ![Presets menu in the dock](docs/presets.png) |
-| **First run** | |
-| ![Empty state](docs/empty.png) | |
+| ![Three tabs signed in as different users, with overflow results](https://github.com/dr1tch/breakpoints/releases/download/media/overview.png) | ![Session menu with Default, Admin and Client](https://github.com/dr1tch/breakpoints/releases/download/media/sessions.png) |
+| **Five widths, overflow details in a popover** | **Presets** |
+| ![Five frames with overflow results](https://github.com/dr1tch/breakpoints/releases/download/media/five-widths.png) | ![Presets menu in the dock](https://github.com/dr1tch/breakpoints/releases/download/media/presets.png) |
+| **New tab** | |
+| ![Empty state of a new tab](https://github.com/dr1tch/breakpoints/releases/download/media/empty.png) | |
 
 ## Development
 
