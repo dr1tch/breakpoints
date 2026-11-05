@@ -8,6 +8,7 @@ Breakpoints is a desktop app for Linux and Windows. Enter the URL of the page yo
 
 ## Features
 
+- **Tabs:** like Chrome. Each tab has its own page, widths and height; background tabs stay loaded. Drag to reorder, middle-click to close, and tabs come back after a restart.
 - **Breakpoint ruler:** common widths grouped by phone (360, 375, 390, 414), tablet (768, 820) and desktop (1024 to 2560). Click a width to add or remove its frame, or add custom widths from 200 to 3840 px.
 - **Real device emulation:** each frame is emulated over the Chrome DevTools Protocol, so pages see a real viewport, not a squeezed iframe. Below 600 px a frame is a phone (iPhone user agent, touch, pixel ratio 3); below 1024 px a tablet (iPad user agent, touch, pixel ratio 2); wider frames are desktop. Turn it off with **Emulate**.
 - **One shared session:** all frames share one persistent browser session. Sign in once in any frame and every frame is signed in, also after a restart.
@@ -46,6 +47,9 @@ Get the `.deb`, AppImage or Windows installer from [Releases](https://github.com
 
 | Shortcut | Action |
 |---|---|
+| `Ctrl+T` / `Ctrl+W` | New tab / close tab |
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tab |
+| `Ctrl+1` … `Ctrl+9` | Go to tab 1 … 8, or the last tab |
 | `Ctrl+L` | Focus the address bar |
 | `Ctrl+R` | Reload all frames |
 | `Ctrl+0` | Fit frames to the window |

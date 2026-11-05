@@ -26,9 +26,11 @@ type Props = {
   overflow: OverflowReport | null | undefined
   onReady: (index: number, wv: WebviewTag) => void
   onNavigate: (index: number, url: string) => void
+  // Only the first frame names the tab.
+  onTitle?: (title: string) => void
 }
 
-export function Frame({ index, url, width, height, scale, device, current, overflow, onReady, onNavigate }: Props) {
+export function Frame({ index, url, width, height, scale, device, current, overflow, onReady, onNavigate, onTitle }: Props) {
   const host = useRef<HTMLDivElement>(null)
   const wvRef = useRef<WebviewTag | null>(null)
   const idRef = useRef<number | null>(null)
@@ -71,6 +73,7 @@ export function Frame({ index, url, width, height, scale, device, current, overf
       if ("isMainFrame" in e && !e.isMainFrame) return
       onNavigate(index, e.url)
     }
+    if (onTitle) wv.addEventListener("page-title-updated", (e) => started && onTitle(e.title))
     wv.addEventListener("did-navigate", nav)
     wv.addEventListener("did-navigate-in-page", nav)
     return () => {

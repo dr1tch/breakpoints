@@ -1,191 +1,78 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import type { WebviewTag } from "electron"
-import { CircleCheck, TriangleAlert, X } from "lucide-react"
-import { DevicesMark, Kbd } from "@/components/device"
-import { Dock } from "@/components/dock"
-import { Frame } from "@/components/frame"
-import { Ruler } from "@/components/ruler"
-import { TopBar } from "@/components/top-bar"
-import { OVERFLOW_SCRIPT, type OverflowReport } from "@/lib/overflow"
-import {
-  DEFAULT_HEIGHT,
-  DEFAULT_WIDTHS,
-  deviceFor,
-  fitScale,
-  normalizeUrl,
-  onNavigated,
-  parseHeight,
-  startSync,
-  upsertPreset,
-  type Preset,
-  type SyncState,
-} from "@shared/grid"
+import { GridView } from "@/components/grid-view"
+import { TabStrip, tabLabel } from "@/components/tab-strip"
+import { DEFAULT_HEIGHT, DEFAULT_WIDTHS, type Preset } from "@shared/grid"
+import { addTab, closeTab, cycleTab, moveTab, patchTab, pickTab, restoreTabs, type GridConfig, type Tab, type TabsState } from "@shared/tabs"
 
-type Config = { url: string; widths: number[]; height: number; emulate: boolean }
-type Toast = { text: string; tone: "ok" | "error"; action?: { label: string; run: () => void } }
-
-const LAST_KEY = "breakpoints:last"
+const TABS_KEY = "breakpoints:tabs"
 const PRESETS_KEY = "breakpoints:presets"
-const EXAMPLE = "http://localhost:3000/v2/projects"
+// Before tabs, the app saved one grid here; it becomes the first tab.
+const LEGACY_KEY = "breakpoints:last"
 
-function load<T>(key: string, fallback: T): T {
+function load(key: string): unknown {
   try {
     const v = localStorage.getItem(key)
-    return v ? (JSON.parse(v) as T) : fallback
+    return v ? JSON.parse(v) : null
   } catch {
-    return fallback
+    return null
   }
 }
 function save(key: string, value: unknown) {
   try {
     localStorage.setItem(key, JSON.stringify(value))
   } catch {
-    // storage full or blocked: the grid still works, it just won't remember
+    // storage full or blocked: the app still works, it just won't remember
   }
 }
 
-// No URL on first run: the empty state asks for one.
-const DEFAULT: Config = { url: "", widths: DEFAULT_WIDTHS, height: DEFAULT_HEIGHT, emulate: true }
+const DEFAULT: GridConfig = { url: "", widths: DEFAULT_WIDTHS, height: DEFAULT_HEIGHT, emulate: true }
+const newTab = (from?: GridConfig): Tab => ({ id: crypto.randomUUID(), title: "", config: { ...DEFAULT, ...(from && { widths: from.widths, height: from.height, emulate: from.emulate }), url: "" } })
+
+function initialTabs(): TabsState {
+  const saved = load(TABS_KEY)
+  if (saved) return restoreTabs(saved, newTab)
+  const legacy = load(LEGACY_KEY) as Partial<GridConfig> | null
+  return restoreTabs(null, () => ({ ...newTab(), config: { ...DEFAULT, ...legacy } }))
+}
 
 export function App() {
-  const [config, setConfig] = useState<Config>(() => ({ ...DEFAULT, ...load<Partial<Config>>(LAST_KEY, {}) }))
-  // Bumped whenever frames must remount and load fresh.
-  const [generation, setGeneration] = useState(0)
-  const [urlText, setUrlText] = useState(config.url)
-  const [heightText, setHeightText] = useState(String(config.height))
-  const [scale, setScale] = useState(0)
-  const [sync, setSync] = useState(true)
-  const [presets, setPresets] = useState<Preset[]>(() => load(PRESETS_KEY, []))
-  const [current, setCurrent] = useState<string[]>([])
-  const [overflow, setOverflow] = useState<(OverflowReport | null | undefined)[]>([])
-  const [checked, setChecked] = useState(false)
-  const [toast, setToast] = useState<Toast | null>(null)
-  const [busy, setBusy] = useState(false)
-  const gridRef = useRef<HTMLDivElement>(null)
-  const urlRef = useRef<HTMLInputElement>(null)
-  const views = useRef<(WebviewTag | null)[]>([])
-  const syncRef = useRef<SyncState>(startSync(config.url, config.widths.length, Date.now()))
-  const syncOn = useRef(sync)
-  syncOn.current = sync
+  const [state, setState] = useState<TabsState>(initialTabs)
+  const [presets, setPresets] = useState<Preset[]>(() => (load(PRESETS_KEY) as Preset[] | null) ?? [])
 
+  useEffect(() => save(TABS_KEY, state), [state])
+  useEffect(() => save(PRESETS_KEY, presets), [presets])
+
+  const activeTab = state.tabs.find((t) => t.id === state.active)!
   useEffect(() => {
-    if (!toast) return
-    const t = setTimeout(() => setToast(null), toast.action ? 10000 : 5000)
-    return () => clearTimeout(t)
-  }, [toast])
+    document.title = `${tabLabel(activeTab)} – Breakpoints`
+  }, [activeTab])
 
-  const fit = useCallback(() => {
-    // 24 = main's padding; 12 more so a vertical scrollbar appearing doesn't wrap the row.
-    const available = (gridRef.current?.clientWidth ?? window.innerWidth) - 36
-    setScale(fitScale(available, config.widths))
-  }, [config.widths])
+  const open = useCallback(() => setState((s) => addTab(s, newTab(s.tabs.find((t) => t.id === s.active)?.config))), [])
+  // Closing the last tab leaves a blank one instead of an empty window.
+  const close = useCallback(
+    (id: string) =>
+      setState((s) => {
+        if (s.tabs.length > 1) return closeTab(s, id)
+        const t = newTab(s.tabs[0].config)
+        return { tabs: [t], active: t.id }
+      }),
+    [],
+  )
+  const onConfig = useCallback((id: string, config: GridConfig) => setState((s) => patchTab(s, id, { config, title: "" })), [])
+  const onTitle = useCallback((id: string, title: string) => setState((s) => patchTab(s, id, { title })), [])
 
-  useEffect(() => {
-    if (!scale) fit()
-  }, [scale, fit])
-
-  const apply = (next: Config) => {
-    setConfig(next)
-    save(LAST_KEY, next)
-    setUrlText(next.url)
-    setHeightText(String(next.height))
-    views.current = []
-    syncRef.current = startSync(next.url, next.widths.length, Date.now())
-    setCurrent([])
-    setOverflow([])
-    setChecked(false)
-    setGeneration((g) => g + 1)
-  }
-
-  const error = (text: string) => setToast({ text, tone: "error" })
-
-  const go = (text = urlText) => {
-    const url = normalizeUrl(text)
-    const height = parseHeight(heightText)
-    if (!url) return error("Enter an http(s) URL, e.g. localhost:3000/v2/projects.")
-    if (!height) return error("Height: a whole number from 300 to 2400.")
-    apply({ ...config, url, height })
-  }
-
-  const setWidths = (widths: number[]) => {
-    apply({ ...config, widths })
-    setScale(0)
-  }
-
-  const onReady = useCallback((i: number, wv: WebviewTag) => {
-    views.current[i] = wv
-  }, [])
-
-  const onNavigate = useCallback((i: number, url: string) => {
-    const r = onNavigated(syncRef.current, i, url, Date.now(), syncOn.current)
-    syncRef.current = r.state
-    setCurrent((c) => Object.assign([...c], { [i]: url }))
-    setOverflow((o) => Object.assign([...o], { [i]: undefined }))
-    if (r.targets.length) {
-      setUrlText(url)
-      for (const t of r.targets) views.current[t]?.loadURL(url).catch(() => {})
-    }
-  }, [])
-
-  const reloadAll = () => {
-    views.current.forEach((wv, i) => setTimeout(() => wv?.reload(), i * 1500))
-    setOverflow([])
-    setChecked(false)
-  }
-
-  const checkOverflow = async () => {
-    if (!config.url) return
-    setBusy(true)
-    const results = await Promise.all(
-      config.widths.map((_, i) =>
-        views.current[i] ? (views.current[i]!.executeJavaScript(OVERFLOW_SCRIPT) as Promise<OverflowReport>).catch(() => null) : Promise.resolve(null),
-      ),
-    )
-    setOverflow(results)
-    setChecked(true)
-    setBusy(false)
-  }
-
-  const screenshot = async () => {
-    if (!config.url) return
-    setBusy(true)
-    try {
-      const frames = config.widths
-        .map((width, i) => ({ wv: views.current[i], width, label: deviceFor(width, config.emulate).label }))
-        .filter((f) => f.wv)
-        .map((f) => ({ id: f.wv!.getWebContentsId(), width: f.width, label: f.label }))
-      const dir = await window.api.screenshot(frames)
-      setToast({ text: `Saved ${frames.length} screenshots · ${dir.replace(/^\/home\/[^/]+/, "~")}`, tone: "ok", action: { label: "Open folder", run: () => window.api.openScreenshots() } })
-    } catch (e) {
-      error(`Screenshots failed: ${(e as Error).message}`)
-    }
-    setBusy(false)
-  }
-
-  const savePreset = (name: string) => {
-    const next = upsertPreset(presets, { name, url: config.url, widths: config.widths, height: config.height })
-    setPresets(next)
-    save(PRESETS_KEY, next)
-    setToast({ text: `Saved preset "${name}".`, tone: "ok" })
-  }
-
-  const deletePreset = (name: string) => {
-    const next = presets.filter((p) => p.name !== name)
-    setPresets(next)
-    save(PRESETS_KEY, next)
-  }
-
-  // Shortcuts work while focus is in the app's own controls; a focused frame keeps its keys.
-  const keys = useRef({ fit, reloadAll, checkOverflow, screenshot })
-  keys.current = { fit, reloadAll, checkOverflow, screenshot }
+  const keys = useRef({ open, close, active: state.active })
+  keys.current = { open, close, active: state.active }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!e.ctrlKey || e.altKey) return
       const k = keys.current
-      const map: Record<string, () => void> = e.shiftKey
-        ? { KeyO: k.checkOverflow, KeyS: k.screenshot }
-        : { KeyL: () => urlRef.current?.select(), KeyR: k.reloadAll, Digit0: k.fit }
-      const run = map[e.code]
+      let run: (() => void) | null = null
+      if (e.code === "KeyT" && !e.shiftKey) run = k.open
+      else if (e.code === "KeyW" && !e.shiftKey) run = () => k.close(k.active)
+      else if (e.code === "Tab") run = () => setState((s) => cycleTab(s, e.shiftKey ? -1 : 1))
+      else if (e.code === "PageDown" || e.code === "PageUp") run = () => setState((s) => cycleTab(s, e.code === "PageDown" ? 1 : -1))
+      else if (/^Digit[1-9]$/.test(e.code) && !e.shiftKey) run = () => setState((s) => pickTab(s, Number(e.code.slice(5))))
       if (!run) return
       e.preventDefault()
       run()
@@ -194,98 +81,29 @@ export function App() {
     return () => window.removeEventListener("keydown", onKey)
   }, [])
 
-  const bad = overflow.filter((r) => r && (r.page || r.items.length)).length
-
   return (
     <div className="flex h-full flex-col">
-      <TopBar url={urlText} height={heightText} onUrl={setUrlText} onHeight={setHeightText} onGo={() => go()} urlRef={urlRef} />
-      <Ruler widths={config.widths} onChange={setWidths} onError={error} />
-      <main ref={gridRef} className="flex-1 overflow-auto p-3 pb-24">
-        {!config.url ? (
-          <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-            <DevicesMark />
-            <h1 className="text-base font-semibold">Enter a URL to start</h1>
-            <p className="max-w-xs text-xs text-muted-foreground">
-              Your page loads at every width side by side. Press <Kbd>Ctrl L</Kbd> to jump to the address bar.
-            </p>
-            <button type="button" className="rounded-md border px-3 py-1.5 font-mono text-xs hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring" onClick={() => go(EXAMPLE)}>
-              {EXAMPLE.replace("http://", "")}
-            </button>
-          </div>
-        ) : (
-          <>
-            {checked && (
-              <p role="status" className="mb-2 flex items-center gap-2 text-xs">
-                <span className="font-semibold tracking-wider text-muted-foreground uppercase">Overflow</span>
-                {bad ? (
-                  <span className="text-danger">
-                    {bad} of {overflow.length} frames have overflow
-                  </span>
-                ) : (
-                  <span className="text-success">No overflow in any frame</span>
-                )}
-                <span className="text-muted-foreground">· checked just now</span>
-              </p>
-            )}
-            <div className="flex flex-wrap content-start items-start gap-4">
-              {scale > 0 &&
-                config.widths.map((w, i) => (
-                  <Frame
-                    key={`${generation}-${i}-${w}`}
-                    index={i}
-                    url={config.url}
-                    width={w}
-                    height={config.height}
-                    scale={scale}
-                    device={deviceFor(w, config.emulate)}
-                    current={current[i] ?? ""}
-                    overflow={checked ? overflow[i] : undefined}
-                    onReady={onReady}
-                    onNavigate={onNavigate}
-                  />
-                ))}
-            </div>
-          </>
-        )}
-      </main>
-      {toast && (
-        <div
-          role={toast.tone === "error" ? "alert" : "status"}
-          className="fixed bottom-20 left-1/2 z-40 flex max-w-[90vw] -translate-x-1/2 items-center gap-2 rounded-lg border bg-popover px-3 py-2 text-xs shadow-xl"
-        >
-          {toast.tone === "ok" ? <CircleCheck aria-hidden className="size-4 shrink-0 text-success" /> : <TriangleAlert aria-hidden className="size-4 shrink-0 text-danger" />}
-          <span className="truncate">{toast.text}</span>
-          {toast.action && (
-            <button type="button" className="shrink-0 text-link underline-offset-2 hover:underline" onClick={toast.action.run}>
-              {toast.action.label}
-            </button>
-          )}
-          <button type="button" aria-label="Dismiss" className="shrink-0 text-muted-foreground hover:text-foreground" onClick={() => setToast(null)}>
-            <X className="size-3.5" />
-          </button>
-        </div>
-      )}
-      <Dock
-        sync={sync}
-        emulate={config.emulate}
-        scale={scale || 0.5}
-        busy={busy}
-        presets={presets}
-        onSync={setSync}
-        onEmulate={(v) => apply({ ...config, emulate: v })}
-        onScale={setScale}
-        onFit={fit}
-        onReload={reloadAll}
-        onOverflow={checkOverflow}
-        onScreenshots={screenshot}
-        onApplyPreset={(p) => {
-          apply({ ...config, url: p.url, widths: p.widths, height: p.height })
-          setScale(0)
-        }}
-        onSavePreset={savePreset}
-        onDeletePreset={deletePreset}
+      <TabStrip
+        tabs={state.tabs}
+        active={state.active}
+        onSelect={(id) => setState((s) => ({ ...s, active: id }))}
+        onClose={close}
+        onNew={open}
+        onMove={(id, to) => setState((s) => moveTab(s, id, to))}
       />
+      <div className="relative flex-1">
+        {state.tabs.map((t) => (
+          <GridView
+            key={t.id}
+            initial={t.config}
+            active={t.id === state.active}
+            presets={presets}
+            onPresets={setPresets}
+            onConfig={(c) => onConfig(t.id, c)}
+            onTitle={(title) => onTitle(t.id, title)}
+          />
+        ))}
+      </div>
     </div>
   )
 }
-
