@@ -8,7 +8,7 @@ import type { OverflowReport } from "@/lib/overflow"
 import { kindOf, type Device } from "@shared/grid"
 import { cn } from "@/lib/utils"
 
-// Loads are staggered so frames don't race one shared session refresh (seen on the Evercam dashboard).
+// Loads are staggered so frames sharing one session do not race its refresh on load.
 const STAGGER_MS = 1500
 // Below this on-screen width the overflow details move into a popover.
 const NARROW_PX = 150
