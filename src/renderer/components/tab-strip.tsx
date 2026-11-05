@@ -1,10 +1,12 @@
 import { useState } from "react"
 import { Globe, Plus, X } from "lucide-react"
 import type { Tab } from "@shared/tabs"
+import { DEFAULT_SESSION, type Session } from "@shared/sessions"
 import { cn } from "@/lib/utils"
 
 type Props = {
   tabs: Tab[]
+  sessionOf: (t: Tab) => Session
   active: string
   onSelect: (id: string) => void
   onClose: (id: string) => void
@@ -25,7 +27,7 @@ export function tabLabel(t: Tab): string {
 
 // Chrome-style strip: click to switch, middle-click or ✕ to close, drag to reorder,
 // double-click the empty area for a new tab.
-export function TabStrip({ tabs, active, onSelect, onClose, onNew, onMove }: Props) {
+export function TabStrip({ tabs, sessionOf, active, onSelect, onClose, onNew, onMove }: Props) {
   const [dragId, setDragId] = useState<string | null>(null)
   // Where the dragged tab would land: index of the gap, 0 = before the first tab.
   const [dropAt, setDropAt] = useState<number | null>(null)
@@ -52,13 +54,15 @@ export function TabStrip({ tabs, active, onSelect, onClose, onNew, onMove }: Pro
         {tabs.map((t, i) => {
           const on = t.id === active
           const label = tabLabel(t)
+          const ses = sessionOf(t)
+          const named = ses.id !== DEFAULT_SESSION.id
           return (
             <div
               key={t.id}
               role="tab"
               aria-selected={on}
               tabIndex={on ? 0 : -1}
-              title={label}
+              title={named ? `${label} · ${ses.name}` : label}
               draggable
               onDragStart={(e) => {
                 setDragId(t.id)
@@ -89,7 +93,9 @@ export function TabStrip({ tabs, active, onSelect, onClose, onNew, onMove }: Pro
             >
               {/* Separator between two inactive tabs, like Chrome. */}
               {!on && i > 0 && tabs[i - 1].id !== active && <span aria-hidden className="absolute top-2 bottom-2 left-0 w-px bg-border" />}
-              <Globe aria-hidden className="size-3.5 shrink-0" />
+              {/* Named sessions get a colored line under the tab, like Firefox containers. */}
+              {named && <span aria-hidden className="absolute right-2 bottom-0 left-2 h-0.5 rounded-full" style={{ background: ses.color }} />}
+              <Globe aria-hidden className="size-3.5 shrink-0" style={named ? { color: ses.color } : undefined} />
               <span className="min-w-0 flex-1 truncate">{label}</span>
               <button
                 type="button"

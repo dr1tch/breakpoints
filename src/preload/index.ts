@@ -11,6 +11,7 @@ const api = {
   emulate: (id: number, e: Emulation) => call<void>("frame:emulate", id, e),
   devtools: (id: number) => call<void>("frame:devtools", id),
   screenshot: (frames: { id: number; width: number; label: string }[]) => call<string>("frames:screenshot", frames),
+  clearSession: (partition: string) => call<void>("session:clear", partition),
   openScreenshots: () => call<void>("screenshots:open"),
   openExternal: (url: string) => call<void>("open:external", url),
 }

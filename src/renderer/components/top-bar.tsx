@@ -1,4 +1,4 @@
-import type { Ref } from "react"
+import type { ReactNode, Ref } from "react"
 import { Globe } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Kbd } from "@/components/device"
@@ -10,9 +10,11 @@ type Props = {
   onHeight: (v: string) => void
   onGo: () => void
   urlRef: Ref<HTMLInputElement>
+  // Shown before the address bar (the session picker).
+  start?: ReactNode
 }
 
-export function TopBar({ url, height, onUrl, onHeight, onGo, urlRef }: Props) {
+export function TopBar({ url, height, onUrl, onHeight, onGo, urlRef, start }: Props) {
   return (
     <form
       className="flex items-center justify-center gap-2 px-3 pt-2"
@@ -21,6 +23,7 @@ export function TopBar({ url, height, onUrl, onHeight, onGo, urlRef }: Props) {
         onGo()
       }}
     >
+      {start}
       <label className="flex h-8 w-full max-w-2xl items-center gap-2 rounded-lg border bg-muted px-2.5 focus-within:border-ring">
         <Globe aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
         <input

@@ -2,10 +2,12 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { GridView } from "@/components/grid-view"
 import { TabStrip, tabLabel } from "@/components/tab-strip"
 import { DEFAULT_HEIGHT, DEFAULT_WIDTHS, type Preset } from "@shared/grid"
+import { createSession, DEFAULT_SESSION, partitionFor, restoreSessions, type Session } from "@shared/sessions"
 import { addTab, closeTab, cycleTab, moveTab, patchTab, pickTab, restoreTabs, type GridConfig, type Tab, type TabsState } from "@shared/tabs"
 
 const TABS_KEY = "breakpoints:tabs"
 const PRESETS_KEY = "breakpoints:presets"
+const SESSIONS_KEY = "breakpoints:sessions"
 // Before tabs, the app saved one grid here; it becomes the first tab.
 const LEGACY_KEY = "breakpoints:last"
 
@@ -26,7 +28,13 @@ function save(key: string, value: unknown) {
 }
 
 const DEFAULT: GridConfig = { url: "", widths: DEFAULT_WIDTHS, height: DEFAULT_HEIGHT, emulate: true }
-const newTab = (from?: GridConfig): Tab => ({ id: crypto.randomUUID(), title: "", config: { ...DEFAULT, ...(from && { widths: from.widths, height: from.height, emulate: from.emulate }), url: "" } })
+// A new tab keeps the current tab's widths, height and session, with no page yet.
+const newTab = (from?: Tab): Tab => ({
+  id: crypto.randomUUID(),
+  title: "",
+  session: from?.session ?? DEFAULT_SESSION.id,
+  config: { ...DEFAULT, ...(from && { widths: from.config.widths, height: from.config.height, emulate: from.config.emulate }), url: "" },
+})
 
 function initialTabs(): TabsState {
   const saved = load(TABS_KEY)
@@ -40,20 +48,35 @@ export function App() {
   const [presets, setPresets] = useState<Preset[]>(() => (load(PRESETS_KEY) as Preset[] | null) ?? [])
 
   useEffect(() => save(TABS_KEY, state), [state])
+  const [sessions, setSessions] = useState<Session[]>(() => restoreSessions(load(SESSIONS_KEY)))
   useEffect(() => save(PRESETS_KEY, presets), [presets])
+  useEffect(() => save(SESSIONS_KEY, sessions.slice(1)), [sessions])
+  const sessionOf = (t: Tab) => sessions.find((s) => s.id === t.session) ?? DEFAULT_SESSION
+
+  const createFor = (tabId: string, name: string) => {
+    const id = crypto.randomUUID()
+    setSessions((list) => createSession(list, name, id))
+    setState((s) => patchTab(s, tabId, { session: id }))
+  }
+  // Tabs on the deleted session move to Default first, so no frame is using it when its data is wiped.
+  const deleteSession = (id: string) => {
+    setSessions((list) => list.filter((s) => s.id !== id))
+    setState((s) => ({ ...s, tabs: s.tabs.map((t) => (t.session === id ? { ...t, session: DEFAULT_SESSION.id } : t)) }))
+    setTimeout(() => window.api.clearSession(partitionFor(id)).catch((e) => console.warn("session clear failed", e)), 500)
+  }
 
   const activeTab = state.tabs.find((t) => t.id === state.active)!
   useEffect(() => {
     document.title = `${tabLabel(activeTab)} – Breakpoints`
   }, [activeTab])
 
-  const open = useCallback(() => setState((s) => addTab(s, newTab(s.tabs.find((t) => t.id === s.active)?.config))), [])
+  const open = useCallback(() => setState((s) => addTab(s, newTab(s.tabs.find((t) => t.id === s.active)))), [])
   // Closing the last tab leaves a blank one instead of an empty window.
   const close = useCallback(
     (id: string) =>
       setState((s) => {
         if (s.tabs.length > 1) return closeTab(s, id)
-        const t = newTab(s.tabs[0].config)
+        const t = newTab(s.tabs[0])
         return { tabs: [t], active: t.id }
       }),
     [],
@@ -85,6 +108,7 @@ export function App() {
     <div className="flex h-full flex-col">
       <TabStrip
         tabs={state.tabs}
+        sessionOf={sessionOf}
         active={state.active}
         onSelect={(id) => setState((s) => ({ ...s, active: id }))}
         onClose={close}
@@ -101,6 +125,11 @@ export function App() {
             onPresets={setPresets}
             onConfig={(c) => onConfig(t.id, c)}
             onTitle={(title) => onTitle(t.id, title)}
+            session={sessionOf(t)}
+            sessions={sessions}
+            onSession={(id) => setState((s) => patchTab(s, t.id, { session: id }))}
+            onCreateSession={(name) => createFor(t.id, name)}
+            onDeleteSession={deleteSession}
           />
         ))}
       </div>

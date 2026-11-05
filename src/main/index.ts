@@ -1,10 +1,11 @@
 import { mkdir, writeFile } from "node:fs/promises"
 import { join } from "node:path"
-import { app, BrowserWindow, ipcMain, Menu, shell, webContents } from "electron"
+import { app, BrowserWindow, ipcMain, Menu, session, shell, webContents } from "electron"
 import type { Emulation } from "@shared/grid"
+import { isSessionPartition } from "@shared/sessions"
 
-// Every frame shares this persistent session: sign in once, it survives restarts.
-export const PARTITION = "persist:grid"
+// Default session's partition; named sessions get their own (see shared/sessions.ts).
+const PARTITION = "persist:grid"
 
 let win: BrowserWindow | null = null
 // Only the folder this app just wrote can be opened from the renderer.
@@ -24,7 +25,7 @@ function createWindow() {
   win.webContents.on("will-navigate", (e, url) => {
     if (url !== win?.webContents.getURL()) e.preventDefault()
   })
-  // Frames are untrusted pages: no preload, no node, fixed shared partition.
+  // Frames are untrusted pages: no preload, no node, and only a session partition.
   win.webContents.on("will-attach-webview", (_e, prefs, params) => {
     delete prefs.preload
     prefs.nodeIntegration = false
@@ -32,7 +33,7 @@ function createWindow() {
     prefs.sandbox = true
     // Hidden or covered frames must keep painting, or screenshots wait forever for a frame.
     prefs.backgroundThrottling = false
-    params.partition = PARTITION
+    if (!isSessionPartition(params.partition)) params.partition = PARTITION
   })
   if (process.env.ELECTRON_RENDERER_URL) win.loadURL(process.env.ELECTRON_RENDERER_URL)
   else win.loadFile(join(__dirname, "../renderer/index.html"))
@@ -101,6 +102,13 @@ function registerIpc() {
   ipcMain.handle("frame:emulate", (_e, id: number, em: Emulation) => emulate(Number(id), em))
   ipcMain.handle("frame:devtools", (_e, id: number) => guest(Number(id)).openDevTools({ mode: "detach" }))
   ipcMain.handle("frames:screenshot", (_e, frames: { id: number; width: number; label: string }[]) => screenshot(frames))
+  // Deleting a session signs it out everywhere: cookies, storage and cache.
+  ipcMain.handle("session:clear", async (_e, partition: string) => {
+    if (typeof partition !== "string" || !isSessionPartition(partition) || partition === PARTITION) throw new Error("Unknown session")
+    const ses = session.fromPartition(partition)
+    await ses.clearStorageData()
+    await ses.clearCache()
+  })
   ipcMain.handle("screenshots:open", () => {
     if (lastShotDir) shell.openPath(lastShotDir)
   })

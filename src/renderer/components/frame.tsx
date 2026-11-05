@@ -18,6 +18,7 @@ type Status = { kind: "queued" } | { kind: "loading" } | { kind: "ready" } | { k
 type Props = {
   index: number
   url: string
+  partition: string
   width: number
   height: number
   scale: number
@@ -30,7 +31,7 @@ type Props = {
   onTitle?: (title: string) => void
 }
 
-export function Frame({ index, url, width, height, scale, device, current, overflow, onReady, onNavigate, onTitle }: Props) {
+export function Frame({ index, url, partition, width, height, scale, device, current, overflow, onReady, onNavigate, onTitle }: Props) {
   const host = useRef<HTMLDivElement>(null)
   const wvRef = useRef<WebviewTag | null>(null)
   const idRef = useRef<number | null>(null)
@@ -42,7 +43,7 @@ export function Frame({ index, url, width, height, scale, device, current, overf
   // One webview per mount; the parent remounts (new key) when url, widths, height or device change.
   useEffect(() => {
     const wv = document.createElement("webview") as WebviewTag
-    wv.setAttribute("partition", "persist:grid")
+    wv.setAttribute("partition", partition)
     wv.setAttribute("src", "about:blank")
     wv.style.display = "flex"
     host.current!.appendChild(wv)

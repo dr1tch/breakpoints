@@ -1,7 +1,8 @@
 // Pure tab-strip logic. Rendering and persistence live in the renderer.
 
 export type GridConfig = { url: string; widths: number[]; height: number; emulate: boolean }
-export type Tab = { id: string; title: string; config: GridConfig }
+// session: id of a Session (see sessions.ts); tabs saved before sessions existed get "default".
+export type Tab = { id: string; title: string; session: string; config: GridConfig }
 export type TabsState = { tabs: Tab[]; active: string }
 
 // New tabs open right after the active one, like Chrome.
@@ -58,5 +59,6 @@ export function restoreTabs(raw: unknown, blank: () => Tab): TabsState {
     const t = blank()
     return { tabs: [t], active: t.id }
   }
-  return { tabs, active: tabs.some((t) => t.id === r?.active) ? r!.active! : tabs[0].id }
+  const fixed = tabs.map((t) => (typeof t.session === "string" ? t : { ...t, session: "default" }))
+  return { tabs: fixed, active: fixed.some((t) => t.id === r?.active) ? r!.active! : fixed[0].id }
 }

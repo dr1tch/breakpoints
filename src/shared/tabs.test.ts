@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 import { addTab, closeTab, cycleTab, moveTab, pickTab, restoreTabs, type Tab, type TabsState } from "./tabs.ts"
 
-const tab = (id: string): Tab => ({ id, title: id, config: { url: "", widths: [375], height: 800, emulate: true } })
+const tab = (id: string): Tab => ({ id, title: id, session: "default", config: { url: "", widths: [375], height: 800, emulate: true } })
 const state = (ids: string[], active: string): TabsState => ({ tabs: ids.map(tab), active })
 const ids = (s: TabsState) => s.tabs.map((t) => t.id).join("")
 
@@ -36,4 +36,7 @@ test("restoreTabs drops malformed tabs and fixes a missing active id", () => {
   assert.equal(ids(s), "a")
   assert.equal(s.active, "a")
   assert.equal(ids(restoreTabs("garbage", () => tab("new"))), "new")
+  // tabs saved before sessions existed land on Default
+  const { session, ...old } = tab("o")
+  assert.equal(restoreTabs({ tabs: [old], active: "o" }, () => tab("new")).tabs[0].session, "default")
 })

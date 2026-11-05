@@ -11,7 +11,7 @@ Breakpoints is a desktop app for Linux and Windows. Enter the URL of the page yo
 - **Tabs:** like Chrome. Each tab has its own page, widths and height; background tabs stay loaded. Drag to reorder, middle-click to close, and tabs come back after a restart.
 - **Breakpoint ruler:** common widths grouped by phone (360, 375, 390, 414), tablet (768, 820) and desktop (1024 to 2560). Click a width to add or remove its frame, or add custom widths from 200 to 3840 px.
 - **Real device emulation:** each frame is emulated over the Chrome DevTools Protocol, so pages see a real viewport, not a squeezed iframe. Below 600 px a frame is a phone (iPhone user agent, touch, pixel ratio 3); below 1024 px a tablet (iPad user agent, touch, pixel ratio 2); wider frames are desktop. Turn it off with **Emulate**.
-- **One shared session:** all frames share one persistent browser session. Sign in once in any frame and every frame is signed in, also after a restart.
+- **Sessions:** like Firefox containers. Each tab uses a named session with its own cookies and storage, so the same page can be open as different users side by side. Tabs on the same session share one sign-in, which survives restarts. **Default** always exists; deleting another session signs it out and wipes its data.
 - **Sync navigation:** a click in one frame loads the same page in the others. Query and hash changes stay per frame. Turn it off with **Sync**.
 - **Overflow check:** finds elements cut off by the left or right screen edge (ignoring intentional scrollers and carousels), outlines them in red inside the frame and lists them under it with how many pixels stick out. Narrow frames show the details in a popover.
 - **Screenshots:** saves every frame at its real resolution (width × pixel ratio, e.g. 1125 px wide for a 375 px phone) to `~/Pictures/breakpoints/<timestamp>/`.
@@ -42,7 +42,7 @@ Get the `.deb`, AppImage or Windows installer from [Releases](https://github.com
 
 1. Type the page's URL in the address bar and press **Enter** (or **Go**). Any `http` or `https` URL works, e.g. `localhost:3000/dashboard`.
 2. Pick widths on the ruler. **Fit** scales all frames to the window: one row when they stay readable, otherwise two columns.
-3. If the page needs a login, sign in inside any frame once.
+3. If the page needs a login, sign in inside any frame once. To compare accounts, open a new tab, pick **New session** in the session menu left of the address bar, and sign in as the other user.
 4. Click **Overflow** to check every width, or **Screenshots** to save them.
 
 | Shortcut | Action |

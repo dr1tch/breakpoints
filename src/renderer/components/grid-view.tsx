@@ -21,6 +21,8 @@ import {
   type SyncState,
 } from "@shared/grid"
 import type { GridConfig as Config } from "@shared/tabs"
+import { partitionFor, type Session } from "@shared/sessions"
+import { SessionPicker } from "@/components/session-picker"
 import { cn } from "@/lib/utils"
 
 type Toast = { text: string; tone: "ok" | "error"; action?: { label: string; run: () => void } }
@@ -34,11 +36,16 @@ type Props = {
   onPresets: (presets: Preset[]) => void
   onConfig: (config: Config) => void
   onTitle: (title: string) => void
+  session: Session
+  sessions: Session[]
+  onSession: (id: string) => void
+  onCreateSession: (name: string) => void
+  onDeleteSession: (id: string) => void
 }
 
 // One tab: its own URL, widths and frames. Inactive tabs stay mounted (pages keep their state)
 // but are invisible and inert.
-export function GridView({ initial, active, presets, onPresets, onConfig, onTitle }: Props) {
+export function GridView({ initial, active, presets, onPresets, onConfig, onTitle, session, sessions, onSession, onCreateSession, onDeleteSession }: Props) {
   const [config, setConfig] = useState<Config>(initial)
   // Bumped whenever frames must remount and load fresh.
   const [generation, setGeneration] = useState(0)
@@ -184,7 +191,15 @@ export function GridView({ initial, active, presets, onPresets, onConfig, onTitl
 
   return (
     <div role="tabpanel" inert={!active} className={cn("absolute inset-0 flex flex-col", !active && "invisible")}>
-      <TopBar url={urlText} height={heightText} onUrl={setUrlText} onHeight={setHeightText} onGo={() => go()} urlRef={urlRef} />
+      <TopBar
+        url={urlText}
+        height={heightText}
+        onUrl={setUrlText}
+        onHeight={setHeightText}
+        onGo={() => go()}
+        urlRef={urlRef}
+        start={<SessionPicker current={session} sessions={sessions} onSelect={onSession} onCreate={onCreateSession} onDelete={onDeleteSession} />}
+      />
       <Ruler widths={config.widths} onChange={setWidths} onError={error} />
       <main ref={gridRef} className="flex-1 overflow-auto p-3 pb-24">
         {!config.url ? (
@@ -217,9 +232,10 @@ export function GridView({ initial, active, presets, onPresets, onConfig, onTitl
               {scale > 0 &&
                 config.widths.map((w, i) => (
                   <Frame
-                    key={`${generation}-${i}-${w}`}
+                    key={`${generation}-${session.id}-${i}-${w}`}
                     index={i}
                     url={config.url}
+                    partition={partitionFor(session.id)}
                     width={w}
                     height={config.height}
                     scale={scale}
